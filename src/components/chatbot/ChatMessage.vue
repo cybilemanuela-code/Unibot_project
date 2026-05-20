@@ -55,7 +55,7 @@
 
 <script setup>
 import { computed } from 'vue'
-import { useAuthStore } from '@/stores/auth'
+import { useAuthStore } from '@/stores/authStore'
 
 const props = defineProps({
   message: { type: Object, required: true }

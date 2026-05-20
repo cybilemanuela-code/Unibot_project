@@ -184,7 +184,7 @@
 
 <script setup>
 import { ref, computed } from 'vue'
-import { useAuthStore } from '@/stores/auth'
+import { useAuthStore } from '@/stores/authStore'
 import UButton          from '@/components/common/UButton.vue'
 import NotifToggle      from '@/components/settings/NotifToggle.vue'
 
