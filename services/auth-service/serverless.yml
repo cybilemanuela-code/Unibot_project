@@ -1,0 +1,59 @@
+# AWS Lambda Deployment Configuration
+# 
+# WHY SERVERLESS FRAMEWORK?
+# Serverless abstracts AWS infrastructure management:
+# - Automatic deployment package creation
+# - Lambda function configuration
+# - API Gateway setup
+# - IAM role management
+# - Environment variable injection
+#
+# ARCHITECTURE:
+# Client -> API Gateway -> Lambda -> Firebase
+# - API Gateway handles HTTP request/response
+# - Lambda runs Express app via serverless-http
+# - Firebase handles authentication and database
+
+service: unibot-auth-service
+
+frameworkVersion: "3"
+useDotenv: true
+
+provider:
+  name: aws
+  runtime: nodejs18.x
+  region: ${env:AWS_REGION, "us-east-1"}
+  memorySize: 256
+  timeout: 10
+  
+  # Environment variables passed to Lambda
+  environment:
+    FIREBASE_PROJECT_ID: ${env:FIREBASE_PROJECT_ID}
+    FIREBASE_PRIVATE_KEY: ${env:FIREBASE_PRIVATE_KEY}
+    FIREBASE_CLIENT_EMAIL: ${env:FIREBASE_CLIENT_EMAIL}
+    JWT_SECRET: ${env:JWT_SECRET}
+    ALLOWED_ORIGINS: ${env:ALLOWED_ORIGINS}
+  
+  # IAM role statements for Lambda
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+            - logs:CreateLogGroup
+            - logs:CreateLogStream
+            - logs:PutLogEvents
+          Resource: "*"
+
+functions:
+  api:
+    handler: lambda.handler
+    events:
+      - http:
+          path: /{proxy+}
+          method: ANY
+          cors: true
+
+# Deployment
+# Run: npm run deploy
+# Output: API Gateway URL for your microservice
