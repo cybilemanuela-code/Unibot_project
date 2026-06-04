@@ -175,7 +175,7 @@ class AuthService {
       uid: userRecord.uid,
       email: userRecord.email,
       name: profile.name || userRecord.displayName,
-      role: profile.role || user.customClaims?.role || "student",
+      role: profile.role || user.customClaims?.role || "student"||"administrator",
       token: customToken
     };
   }

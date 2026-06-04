@@ -170,7 +170,7 @@ FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n..."
 FIREBASE_CLIENT_EMAIL=firebase-adminsdk-xxx@project.iam.gserviceaccount.com
 
 # JWT Configuration
-JWT_SECRET=your-super-secret-jwt-key-min-32-chars
+
 
 # CORS Configuration
 ALLOWED_ORIGINS=http://localhost:3000,https://yourdomain.com
@@ -210,7 +210,7 @@ npm run dev
 export FIREBASE_PROJECT_ID="your-project-id"
 export FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n..."
 export FIREBASE_CLIENT_EMAIL="firebase-adminsdk-xxx@project.iam.gserviceaccount.com"
-export JWT_SECRET="your-secret-key"
+
 
 # Deploy
 npm run deploy
