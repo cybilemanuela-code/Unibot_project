@@ -160,7 +160,8 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/authStore'
-import { authService }  from '@/services/authService'
+import { firebaseAuthService } from '@/services/firebaseAuthService'
+import { getFirebaseErrorMessage } from '@/utils/firebaseErrors'
 import { useForm }       from '@/composables/useForm'
 import HeroPanel         from '@/components/auth/HeroPanel.vue'
 import SocialButtons     from '@/components/auth/SocialButtons.vue'
@@ -187,20 +188,30 @@ const { fields, errors, loading, serverError, validateField, handleSubmit } = us
 // ── Submit handler ─────────────────────────────────────────────
 async function onSubmit() {
   await handleSubmit(async (data) => {
-    // TODO: replace with real API call
-    // const res = await authService.register({ name: data.name, email: data.email, password: data.password, role: data.role })
-    // authStore.setSession(res.data.user, res.data.token)
-
-    // ── MOCK for demo ──────────────────────────────────────────
-    await new Promise(r => setTimeout(r, 1200))
-    authStore.setSession(
-      { uid: 'mock-001', name: data.name, email: data.email, role: 'student', avatar: null },
-      'mock-token-xyz'
-    )
+    const res = await firebaseAuthService.register({
+      name: data.name,
+      email: data.email,
+      password: data.password,
+      role: data.role,
+    })
+    authStore.setSession(res.user, res.token)
     router.push('/app/chat')
   })
 }
 
-function handleGoogle()  { console.log('TODO: Firebase Google sign-in') }
+async function handleGoogle() {
+  serverError.value = ''
+  loading.value = true
+  try {
+    const res = await firebaseAuthService.loginWithGoogle()
+    authStore.setSession(res.user, res.token)
+    router.push('/app/chat')
+  } catch (err) {
+    serverError.value = getFirebaseErrorMessage(err) || err.message
+  } finally {
+    loading.value = false
+  }
+}
+
 function handleEntUniv() { console.log('TODO: ENT Univ SSO') }
 </script>

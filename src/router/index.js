@@ -9,7 +9,7 @@ const router = createRouter({
     { path: '/login',    component: () => import('@/pages/Login.vue'),    meta: { guest: true } },
     {
       path: '/app',
-      component: () => import('@/layouts/AppLayout.vue'),
+      component: () => import('@/layouts/appLayout.vue'),
       meta: { requiresAuth: true },
       children: [
         { path: '',        redirect: '/app/chat' },
@@ -21,9 +21,10 @@ const router = createRouter({
   ]
 })
 
-// Navigation guards
-router.beforeEach((to) => {
+// Navigation guards — wait for Firebase to restore session on refresh
+router.beforeEach(async (to) => {
   const auth = useAuthStore()
+  await auth.waitForAuth()
   if (to.meta.requiresAuth && !auth.isLoggedIn) return '/login'
   if (to.meta.guest       && auth.isLoggedIn)  return '/app/chat'
 })

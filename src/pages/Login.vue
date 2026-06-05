@@ -155,6 +155,8 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/authStore'
+import { firebaseAuthService } from '@/services/firebaseAuthService'
+import { getFirebaseErrorMessage } from '@/utils/firebaseErrors'
 import { useForm }       from '@/composables/useForm'
 import HeroPanel         from '@/components/auth/HeroPanel.vue'
 import SocialButtons     from '@/components/auth/SocialButtons.vue'
@@ -176,21 +178,42 @@ const { fields, errors, loading, serverError, validateField, handleSubmit } = us
 
 async function onSubmit() {
   await handleSubmit(async (data) => {
-    // TODO: await authService.login({ email: data.email, password: data.password })
-    await new Promise(r => setTimeout(r, 1000))
-    authStore.setSession(
-      { uid: 'mock-001', name: 'Manuela Djodjoung', email: data.email, role: 'student', avatar: null },
-      'mock-token-xyz'
-    )
+    const res = await firebaseAuthService.login({
+      email: data.email,
+      password: data.password,
+    })
+    authStore.setSession(res.user, res.token)
     router.push('/app/chat')
   })
 }
 
-function continueAsGuest() {
-  authStore.setSession({ uid: 'guest', name: 'Guest', email: '', role: 'student' }, 'guest-token')
-  router.push('/app/chat')
+async function continueAsGuest() {
+  serverError.value = ''
+  loading.value = true
+  try {
+    const res = await firebaseAuthService.loginAsGuest()
+    authStore.setSession(res.user, res.token)
+    router.push('/app/chat')
+  } catch (err) {
+    serverError.value = getFirebaseErrorMessage(err) || err.message
+  } finally {
+    loading.value = false
+  }
 }
 
-function handleGoogle()  { console.log('TODO: Google OAuth') }
+async function handleGoogle() {
+  serverError.value = ''
+  loading.value = true
+  try {
+    const res = await firebaseAuthService.loginWithGoogle()
+    authStore.setSession(res.user, res.token)
+    router.push('/app/chat')
+  } catch (err) {
+    serverError.value = getFirebaseErrorMessage(err) || err.message
+  } finally {
+    loading.value = false
+  }
+}
+
 function handleEntUniv() { console.log('TODO: ENT Univ SSO') }
 </script>

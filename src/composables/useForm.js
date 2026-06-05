@@ -10,6 +10,7 @@
  *   const { fields, errors, loading, validate, handleSubmit } = useForm(schema, onSubmit)
  */
 import { reactive, ref } from 'vue'
+import { getFirebaseErrorMessage } from '@/utils/firebaseErrors'
 
 export function useForm(initialFields, validators = {}) {
   const fields  = reactive({ ...initialFields })
@@ -43,7 +44,11 @@ export function useForm(initialFields, validators = {}) {
     try {
       await submitFn(fields)
     } catch (err) {
-      serverError.value = err?.response?.data?.error || err.message || 'Something went wrong.'
+      serverError.value =
+        err?.response?.data?.error ||
+        getFirebaseErrorMessage(err) ||
+        err.message ||
+        'Something went wrong.'
     } finally {
       loading.value = false
     }

@@ -1,26 +1,39 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 
+const WELCOME_MESSAGE = (name) => ({
+  role: 'bot',
+  text: name
+    ? `Hello ${name}! I'm delighted to see you again. How can I assist you with your university journey today?`
+    : "Hello! I'm delighted to see you again. How can I assist you with your university journey today?",
+  time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+  cards: null,
+})
+
 export const useChatStore = defineStore('chat', () => {
-  const messages  = ref([
-    {
-      id:   1,
-      role: 'bot',
-      text: "Hello Manuela! I'm delighted to see you again. How can I assist you with your university journey today? I have access to your admission files and campus visit schedules.",
-      time: '09:15 AM',
-      cards: null,
-    }
-  ])
+  const messages  = ref([])
   const isTyping  = ref(false)
-  const sessionId = ref('active-session-001')
+  const isLoading = ref(false)
+
+  function setMessages(list) {
+    messages.value = list
+  }
 
   function addMessage(msg) {
-    messages.value.push({ id: Date.now(), ...msg })
+    messages.value.push(msg)
   }
 
   function setTyping(val) { isTyping.value = val }
+  function setLoading(val) { isLoading.value = val }
 
   function clearMessages() { messages.value = [] }
 
-  return { messages, isTyping, sessionId, addMessage, setTyping, clearMessages }
+  function getWelcomeMessage(name) {
+    return { id: 'welcome', ...WELCOME_MESSAGE(name) }
+  }
+
+  return {
+    messages, isTyping, isLoading,
+    setMessages, addMessage, setTyping, setLoading, clearMessages, getWelcomeMessage,
+  }
 })

@@ -141,8 +141,8 @@
 
 <script setup>
 import { ref } from 'vue'
-import FaqItem    from '@/components/support/FaqItem.vue'
-import ResourceItem from '@/components/support/ResourceItem.vue'
+import FaqItem      from '@/components/Support/FaqItem.vue'
+import ResourceItem from '@/components/Support/ResourceItem.vue'
 
 const ticketSubject = ref('')
 const openFaq       = ref(null)

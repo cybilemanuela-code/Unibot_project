@@ -116,6 +116,7 @@
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/authStore'
+import { firebaseAuthService } from '@/services/firebaseAuthService'
 
 const router    = useRouter()
 const authStore = useAuthStore()
@@ -129,7 +130,11 @@ const initials = computed(() => {
 function goSupport() { router.push('/app/support'); sidebarOpen.value = false }
 
 async function logout() {
-  authStore.clearSession()
-  router.push('/login')
+  try {
+    await firebaseAuthService.logout()
+  } finally {
+    authStore.clearSession()
+    router.push('/login')
+  }
 }
 </script>

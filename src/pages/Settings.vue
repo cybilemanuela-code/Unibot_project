@@ -116,6 +116,7 @@
             Save Changes
           </UButton>
           <p v-if="saveSuccess" class="mt-2 text-xs text-green-600 font-medium">✓ Changes saved successfully</p>
+          <p v-if="infoError" class="mt-2 text-xs text-red-500">{{ infoError }}</p>
         </div>
       </div>
 
@@ -175,7 +176,7 @@
           :checked="pref.checked"
           :title="pref.title"
           :desc="pref.desc"
-          @toggle="pref.checked = !pref.checked"
+          @toggle="onNotifToggle(pref)"
         />
       </div>
     </div>
@@ -183,9 +184,12 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useAuthStore } from '@/stores/authStore'
-import UButton          from '@/components/common/UButton.vue'
+import { firestoreService } from '@/services/firestoreService'
+import { firebaseAuthService } from '@/services/firebaseAuthService'
+import { getFirebaseErrorMessage } from '@/utils/firebaseErrors'
+import UButton          from '@/components/common/Ubutton.vue'
 import NotifToggle      from '@/components/settings/NotifToggle.vue'
 
 const authStore = useAuthStore()
@@ -196,11 +200,11 @@ const initials = computed(() =>
 
 // ── Local profile state ────────────────────────────────────────
 const profile = ref({
-  firstName: 'Manuela',
-  lastName:  'Djodjoung',
-  email:     'manuela.djodjoung@university-unibot.edu',
-  phone:     '+33 6 12 34 56 78',
-  studentId: '882941',
+  firstName: '',
+  lastName:  '',
+  email:     '',
+  phone:     '',
+  studentId: '',
 })
 
 const security = ref({ current: '', newPass: '' })
@@ -209,6 +213,7 @@ const savingInfo = ref(false)
 const saveSuccess = ref(false)
 const savingPass  = ref(false)
 const passError   = ref('')
+const infoError   = ref('')
 
 const notifPrefs = ref([
   { key: 'chat',     title: 'Chat Alerts',      desc: 'Receive a notification when there\'s a new reply from the chatbot.', checked: true },
@@ -216,19 +221,62 @@ const notifPrefs = ref([
   { key: 'partner',  title: 'Partner Offers',   desc: 'Receive occasional marketing communications.',                        checked: false },
 ])
 
+onMounted(async () => {
+  if (!authStore.uid) return
+  const data = await firestoreService.getUserProfile(authStore.uid)
+  profile.value = {
+    firstName: data.firstName || '',
+    lastName:  data.lastName  || '',
+    email:     data.email     || authStore.user?.email || '',
+    phone:     data.phone     || '',
+    studentId: data.studentId || '',
+  }
+  if (data.notifPrefs) {
+    notifPrefs.value.forEach((pref) => {
+      if (pref.key in data.notifPrefs) pref.checked = data.notifPrefs[pref.key]
+    })
+  }
+})
+
 async function saveInfo() {
+  if (!authStore.uid) return
   savingInfo.value  = true
   saveSuccess.value = false
-  await new Promise(r => setTimeout(r, 900))
-  // TODO: await authService.updateProfile({ name: `${profile.value.firstName} ${profile.value.lastName}`, phone: profile.value.phone })
-  authStore.updateUser({ name: `${profile.value.firstName} ${profile.value.lastName}` })
-  savingInfo.value  = false
-  saveSuccess.value = true
-  setTimeout(() => saveSuccess.value = false, 3000)
+  infoError.value   = ''
+  try {
+    const fullName = `${profile.value.firstName} ${profile.value.lastName}`.trim()
+    await firebaseAuthService.updateDisplayName(fullName)
+    const updated = await firestoreService.updateUserProfile(authStore.uid, {
+      name:      fullName,
+      firstName: profile.value.firstName,
+      lastName:  profile.value.lastName,
+      email:     profile.value.email,
+      phone:     profile.value.phone,
+      studentId: profile.value.studentId,
+    })
+    authStore.updateUser({
+      name:      updated.name,
+      firstName: updated.firstName,
+      lastName:  updated.lastName,
+      email:     updated.email,
+      phone:     updated.phone,
+      studentId: updated.studentId,
+    })
+    saveSuccess.value = true
+    setTimeout(() => saveSuccess.value = false, 3000)
+  } catch (err) {
+    infoError.value = getFirebaseErrorMessage(err) || err.message
+  } finally {
+    savingInfo.value = false
+  }
 }
 
 async function changePassword() {
   passError.value = ''
+  if (authStore.isGuest) {
+    passError.value = 'Guest accounts cannot change password. Create a full account first.'
+    return
+  }
   if (!security.value.current || !security.value.newPass) {
     passError.value = 'Please fill in both password fields.'; return
   }
@@ -236,10 +284,21 @@ async function changePassword() {
     passError.value = 'New password must be at least 8 characters.'; return
   }
   savingPass.value = true
-  await new Promise(r => setTimeout(r, 900))
-  // TODO: call Firebase updatePassword
-  savingPass.value      = false
-  security.value.current  = ''
-  security.value.newPass  = ''
+  try {
+    await firebaseAuthService.changePassword(security.value.current, security.value.newPass)
+    security.value.current = ''
+    security.value.newPass   = ''
+  } catch (err) {
+    passError.value = getFirebaseErrorMessage(err) || err.message
+  } finally {
+    savingPass.value = false
+  }
+}
+
+async function onNotifToggle(pref) {
+  pref.checked = !pref.checked
+  if (!authStore.uid) return
+  const prefs = Object.fromEntries(notifPrefs.value.map((p) => [p.key, p.checked]))
+  await firestoreService.saveNotificationPrefs(authStore.uid, prefs)
 }
 </script>

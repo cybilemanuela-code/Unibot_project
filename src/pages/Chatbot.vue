@@ -115,13 +115,15 @@
 </template>
 
 <script setup>
-import { ref, nextTick, watch } from 'vue'
+import { ref, nextTick, watch, onMounted } from 'vue'
 import { useChatStore }   from '@/stores/chatStore'
-import { chatService }    from '@/services/chatService'
+import { useAuthStore }   from '@/stores/authStore'
+import { firestoreService } from '@/services/firestoreService'
 import ChatMessage        from '@/components/chatbot/ChatMessage.vue'
 import TypingIndicator    from '@/components/chatbot/TypingIndicator.vue'
 
 const chatStore  = useChatStore()
+const authStore  = useAuthStore()
 const inputText  = ref('')
 const messagesEl = ref(null)
 const bottomEl   = ref(null)
@@ -132,6 +134,23 @@ const quickTopics = [
   { label: 'Financial Aid', text: 'What is the status of my financial aid?', icon: 'M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z' },
   { label: 'Campus Visits', text: 'When is the next campus visit scheduled?', icon: 'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z' },
 ]
+
+onMounted(async () => {
+  if (!authStore.uid) return
+  chatStore.setLoading(true)
+  try {
+    const saved = await firestoreService.getMessages(authStore.uid)
+    if (saved.length) {
+      chatStore.setMessages(saved)
+    } else {
+      const welcome = chatStore.getWelcomeMessage(authStore.fullName.split(' ')[0])
+      chatStore.setMessages([welcome])
+      await firestoreService.addMessage(authStore.uid, welcome)
+    }
+  } finally {
+    chatStore.setLoading(false)
+  }
+})
 
 // Auto-scroll when new messages arrive
 watch(() => chatStore.messages.length, async () => {
@@ -158,26 +177,31 @@ async function sendMessage() {
   inputText.value = ''
   if (textareaEl.value) textareaEl.value.style.height = 'auto'
 
-  // Add user message immediately
-  chatStore.addMessage({ role: 'user', text, time: now() })
+  const userMsg = { role: 'user', text, time: now() }
+  chatStore.addMessage(userMsg)
+  if (authStore.uid) {
+    const saved = await firestoreService.addMessage(authStore.uid, userMsg)
+    chatStore.messages[chatStore.messages.length - 1].id = saved.id
+  }
 
-  // Simulate bot typing
   chatStore.setTyping(true)
   await nextTick()
   bottomEl.value?.scrollIntoView({ behavior: 'smooth' })
 
   try {
-    // TODO: const res = await chatService.sendMessage(text)
-    // chatStore.addMessage({ role: 'bot', text: res.data.reply, time: now() })
-
-    // ── MOCK response ──────────────────────────────────────────
+    // TODO: replace with real AI/backend when ready
     await new Promise(r => setTimeout(r, 1400))
-    chatStore.addMessage({
+    const botMsg = {
       role: 'bot',
       text: 'Thank you for your question! I\'ve found the most relevant information from our knowledge base. Is there anything else I can help you with regarding your academic journey?',
       time: now(),
       cards: null,
-    })
+    }
+    chatStore.addMessage(botMsg)
+    if (authStore.uid) {
+      const saved = await firestoreService.addMessage(authStore.uid, botMsg)
+      chatStore.messages[chatStore.messages.length - 1].id = saved.id
+    }
   } finally {
     chatStore.setTyping(false)
   }
