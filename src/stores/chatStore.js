@@ -14,6 +14,7 @@ export const useChatStore = defineStore('chat', () => {
   const messages  = ref([])
   const isTyping  = ref(false)
   const isLoading = ref(false)
+  const showGuestLimitOverlay = ref(false)
 
   function setMessages(list) {
     messages.value = list
@@ -25,6 +26,7 @@ export const useChatStore = defineStore('chat', () => {
 
   function setTyping(val) { isTyping.value = val }
   function setLoading(val) { isLoading.value = val }
+  function setShowGuestLimitOverlay(val) { showGuestLimitOverlay.value = val }
 
   function clearMessages() { messages.value = [] }
 
@@ -33,7 +35,7 @@ export const useChatStore = defineStore('chat', () => {
   }
 
   return {
-    messages, isTyping, isLoading,
-    setMessages, addMessage, setTyping, setLoading, clearMessages, getWelcomeMessage,
+    messages, isTyping, isLoading, showGuestLimitOverlay,
+    setMessages, addMessage, setTyping, setLoading, setShowGuestLimitOverlay, clearMessages, getWelcomeMessage,
   }
 })

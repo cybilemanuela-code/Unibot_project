@@ -177,6 +177,11 @@ const { fields, errors, loading, serverError, validateField, handleSubmit } = us
 )
 
 async function onSubmit() {
+  if (!navigator.onLine) {
+    serverError.value = 'You are offline. Connect to the internet to log in.'
+    return
+  }
+
   await handleSubmit(async (data) => {
     const res = await firebaseAuthService.login({
       email: data.email,
@@ -188,6 +193,11 @@ async function onSubmit() {
 }
 
 async function continueAsGuest() {
+  if (!navigator.onLine) {
+    serverError.value = 'You are offline. Connect to the internet to log in.'
+    return
+  }
+
   serverError.value = ''
   loading.value = true
   try {
@@ -202,6 +212,11 @@ async function continueAsGuest() {
 }
 
 async function handleGoogle() {
+  if (!navigator.onLine) {
+    serverError.value = 'You are offline. Connect to the internet to log in.'
+    return
+  }
+
   serverError.value = ''
   loading.value = true
   try {

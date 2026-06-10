@@ -7,6 +7,9 @@ const router = createRouter({
     { path: '/',         redirect: '/login' },
     { path: '/register', component: () => import('@/pages/Register.vue'), meta: { guest: true } },
     { path: '/login',    component: () => import('@/pages/Login.vue'),    meta: { guest: true } },
+    { path: '/chat',     component: () => import('@/layouts/appLayout.vue'), children: [
+      { path: '', component: () => import('@/pages/Chatbot.vue') }
+    ]},
     {
       path: '/app',
       component: () => import('@/layouts/appLayout.vue'),
@@ -26,7 +29,7 @@ router.beforeEach(async (to) => {
   const auth = useAuthStore()
   await auth.waitForAuth()
   if (to.meta.requiresAuth && !auth.isLoggedIn) return '/login'
-  if (to.meta.guest       && auth.isLoggedIn)  return '/app/chat'
+  if (to.meta.guest && auth.isLoggedIn && !auth.isGuest) return '/app/chat'
 })
 
 export default router

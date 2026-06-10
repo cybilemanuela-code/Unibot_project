@@ -4,17 +4,23 @@ import {
   setDoc,
   updateDoc,
   collection,
-  addDoc,
   query,
   orderBy,
   limit,
   getDocs,
   serverTimestamp,
+  writeBatch,
+  increment,
+  deleteDoc,
+  where,
 } from 'firebase/firestore'
 import { db } from '@/firebase'
 
 const userDoc   = (uid) => doc(db, 'users', uid)
 const messagesCol = (uid) => collection(db, 'users', uid, 'messages')
+const chatsCol  = () => collection(db, 'chats')
+const chatDoc   = (chatId) => doc(db, 'chats', chatId)
+const chatMessagesCol = (chatId) => collection(db, 'chats', chatId, 'messages')
 
 const DEFAULT_NOTIF_PREFS = {
   chat:     true,
@@ -38,11 +44,12 @@ function mapProfileData(data = {}) {
     firstName:   data.firstName || firstName,
     lastName:    data.lastName  || lastName,
     email:       data.email     || '',
-    role:        data.role      || 'student',
+    role:        data.role      || 'user',
     avatar:      data.avatar    || null,
     phone:       data.phone     || '',
     studentId:   data.studentId || '',
     notifPrefs:  data.notifPrefs || DEFAULT_NOTIF_PREFS,
+    questionCount: data.questionCount ?? 0,
   }
 }
 
@@ -84,15 +91,108 @@ export const firestoreService = {
     await updateDoc(userDoc(uid), { notifPrefs, updatedAt: serverTimestamp() })
   },
 
-  async addMessage(uid, message) {
-    const ref = await addDoc(messagesCol(uid), {
+  // ────── CHAT SESSIONS ──────────
+  async createChat(uid, title = 'New Chat') {
+    const chatId = doc(chatsCol()).id
+    await setDoc(chatDoc(chatId), {
+      id: chatId,
+      userId: uid,
+      title,
+      messageCount: 0,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    })
+    return chatId
+  },
+
+  async getChats(uid, max = 20) {
+    const q = query(chatsCol(), 
+      where('userId', '==', uid),
+      orderBy('updatedAt', 'desc'), 
+      limit(max)
+    )
+    const snap = await getDocs(q)
+    return snap.docs.map((d) => {
+      const data = d.data()
+      return {
+        id:          d.id,
+        title:       data.title || 'Chat',
+        messageCount: data.messageCount || 0,
+        createdAt:   data.createdAt?.toDate?.() || new Date(),
+        updatedAt:   data.updatedAt?.toDate?.() || new Date(),
+      }
+    })
+  },
+
+  async getChatMessages(chatId, max = 100) {
+    const q = query(chatMessagesCol(chatId), orderBy('createdAt', 'asc'), limit(max))
+    const snap = await getDocs(q)
+    return snap.docs.map((d) => {
+      const data = d.data()
+      return {
+        id:    d.id,
+        role:  data.role,
+        text:  data.text,
+        time:  data.time,
+        cards: data.cards ?? null,
+      }
+    })
+  },
+
+  async addMessageToChat(chatId, message) {
+    const messageRef = doc(chatMessagesCol(chatId))
+    const batch = writeBatch(db)
+
+    batch.set(messageRef, {
       role:      message.role,
       text:      message.text,
       time:      message.time,
       cards:     message.cards ?? null,
       createdAt: serverTimestamp(),
     })
-    return { id: ref.id, ...message }
+
+    // Update chat metadata
+    batch.update(chatDoc(chatId), {
+      messageCount: increment(1),
+      updatedAt: serverTimestamp(),
+    })
+
+    await batch.commit()
+    return { id: messageRef.id, ...message }
+  },
+
+  async updateChatTitle(chatId, title) {
+    await updateDoc(chatDoc(chatId), { title, updatedAt: serverTimestamp() })
+  },
+
+  async deleteChat(chatId) {
+    // Delete all messages in the chat
+    const messages = await getDocs(chatMessagesCol(chatId))
+    const batch = writeBatch(db)
+    messages.forEach((doc) => batch.delete(doc.ref))
+    // Delete the chat document
+    batch.delete(chatDoc(chatId))
+    await batch.commit()
+  },
+
+  async addMessage(uid, message) {
+    const messageRef = doc(messagesCol(uid))
+    const batch = writeBatch(db)
+
+    batch.set(messageRef, {
+      role:      message.role,
+      text:      message.text,
+      time:      message.time,
+      cards:     message.cards ?? null,
+      createdAt: serverTimestamp(),
+    })
+
+    if (message.role === 'user') {
+      batch.set(userDoc(uid), { questionCount: increment(1) }, { merge: true })
+    }
+
+    await batch.commit()
+    return { id: messageRef.id, ...message }
   },
 
   async getMessages(uid, max = 50) {

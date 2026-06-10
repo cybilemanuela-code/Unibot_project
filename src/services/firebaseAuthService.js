@@ -24,7 +24,7 @@ function mapAuthUser(fbUser, profile = {}) {
     firstName: profile.firstName || firstName,
     lastName:  profile.lastName  || rest.join(' '),
     email:     profile.email || fbUser.email || '',
-    role:      profile.role || 'student',
+    role:      profile.role || 'user',
     avatar:    profile.avatar || fbUser.photoURL || null,
     phone:     profile.phone || '',
     studentId: profile.studentId || '',
@@ -33,7 +33,7 @@ function mapAuthUser(fbUser, profile = {}) {
 }
 
 export const firebaseAuthService = {
-  async register({ name, email, password, role = 'student' }) {
+  async register({ name, email, password, role = 'user' }) {
     const cred = await createUserWithEmailAndPassword(auth, email, password)
     await updateProfile(cred.user, { displayName: name })
 
@@ -72,7 +72,7 @@ export const firebaseAuthService = {
     const profile = await firestoreService.ensureUserProfile(cred.user.uid, {
       name:  'Guest',
       email: '',
-      role:  'student',
+      role:  'guest',
     })
     const token = await cred.user.getIdToken()
     return { user: mapAuthUser(cred.user, profile), token }

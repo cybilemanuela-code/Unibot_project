@@ -12,6 +12,14 @@
         <h1 class="font-display text-lg font-semibold text-gray-900">Academic Chat</h1>
         <span class="text-xs font-semibold text-green-600 bg-green-50 border border-green-200
                      px-2.5 py-1 rounded-full tracking-wide">ACTIVE SESSION</span>
+        <!-- Guest question limit badge -->
+        <span v-if="authStore.isGuest" :class="['text-xs font-semibold px-2.5 py-1 rounded-full tracking-wide',
+          guestSession.getRemainingQuestions() > 1
+            ? 'text-blue-600 bg-blue-50 border border-blue-200'
+            : 'text-amber-600 bg-amber-50 border border-amber-200'
+        ]">
+          {{ guestSession.getRemainingQuestions() }} {{ guestSession.getRemainingQuestions() === 1 ? 'question' : 'questions' }} left
+        </span>
       </div>
       <div class="flex items-center gap-2">
         <button class="p-2 rounded-lg hover:bg-surface-100 text-gray-400 hover:text-gray-600 transition-colors">
@@ -93,13 +101,19 @@
         <!-- Send button -->
         <button
           :class="['w-9 h-9 rounded-full flex items-center justify-center shrink-0 transition-all duration-200',
-            inputText.trim()
+            inputText.trim() && !chatStore.isTyping
               ? 'bg-brand-500 hover:bg-brand-600 text-white shadow-sm'
               : 'bg-surface-200 text-gray-400 cursor-not-allowed']"
           :disabled="!inputText.trim() || chatStore.isTyping"
           @click="sendMessage"
         >
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <!-- Spinner during loading -->
+          <svg v-if="chatStore.isTyping" class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
+          <!-- Send icon when not loading -->
+          <svg v-else class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"
               d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
           </svg>
@@ -112,22 +126,63 @@
       </p>
     </div>
   </div>
+
+  <!-- Guest Limit Overlay -->
+  <div v-if="chatStore.showGuestLimitOverlay" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+    <div class="bg-white rounded-2xl shadow-xl max-w-md w-full mx-4 p-8">
+      <!-- Icon -->
+      <div class="flex justify-center mb-6">
+        <div class="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center">
+          <svg class="w-8 h-8 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+          </svg>
+        </div>
+      </div>
+
+      <!-- Text -->
+      <h2 class="text-2xl font-semibold text-gray-900 text-center mb-2">Question Limit Reached</h2>
+      <p class="text-gray-600 text-center mb-6">
+        You've used all 3 guest questions. Sign in to continue asking unlimited questions.
+      </p>
+
+      <!-- Buttons -->
+      <div class="flex flex-col gap-3">
+        <button
+          @click="handleLoginClick"
+          class="w-full py-3 px-4 bg-brand-500 hover:bg-brand-600 text-white font-semibold rounded-lg transition-colors"
+        >
+          Sign In
+        </button>
+        <button
+          @click="handleSignupClick"
+          class="w-full py-3 px-4 border-2 border-brand-200 hover:border-brand-300 text-brand-600 font-semibold rounded-lg transition-colors"
+        >
+          Create Account
+        </button>
+      </div>
+    </div>
+  </div>
 </template>
 
 <script setup>
 import { ref, nextTick, watch, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { useChatStore }   from '@/stores/chatStore'
 import { useAuthStore }   from '@/stores/authStore'
+import { useGuestSession } from '@/composables/useGuestSession'
 import { firestoreService } from '@/services/firestoreService'
 import ChatMessage        from '@/components/chatbot/ChatMessage.vue'
 import TypingIndicator    from '@/components/chatbot/TypingIndicator.vue'
 
+const router = useRouter()
 const chatStore  = useChatStore()
 const authStore  = useAuthStore()
+const guestSession = useGuestSession()
 const inputText  = ref('')
 const messagesEl = ref(null)
 const bottomEl   = ref(null)
 const textareaEl = ref(null)
+const currentChatId = ref(null)
 
 const quickTopics = [
   { label: 'Admissions',    text: 'Tell me about admission requirements.',    icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z' },
@@ -136,17 +191,17 @@ const quickTopics = [
 ]
 
 onMounted(async () => {
-  if (!authStore.uid) return
+  // Initialize guest session for non-logged-in users
+  if (!authStore.uid) {
+    guestSession.initGuestSession()
+    return
+  }
+
   chatStore.setLoading(true)
   try {
-    const saved = await firestoreService.getMessages(authStore.uid)
-    if (saved.length) {
-      chatStore.setMessages(saved)
-    } else {
-      const welcome = chatStore.getWelcomeMessage(authStore.fullName.split(' ')[0])
-      chatStore.setMessages([welcome])
-      await firestoreService.addMessage(authStore.uid, welcome)
-    }
+    // Show welcome message (don't save chat yet)
+    const welcome = chatStore.getWelcomeMessage(authStore.fullName.split(' ')[0])
+    chatStore.setMessages([welcome])
   } finally {
     chatStore.setLoading(false)
   }
@@ -174,14 +229,33 @@ async function sendMessage() {
   const text = inputText.value.trim()
   if (!text || chatStore.isTyping) return
 
+  // Check guest limit
+  if (authStore.isGuest) {
+    if (guestSession.isLimited()) {
+      chatStore.setShowGuestLimitOverlay(true)
+      return
+    }
+    guestSession.incrementQuestionCount()
+  }
+
   inputText.value = ''
   if (textareaEl.value) textareaEl.value.style.height = 'auto'
 
   const userMsg = { role: 'user', text, time: now() }
   chatStore.addMessage(userMsg)
+  
   if (authStore.uid) {
-    const saved = await firestoreService.addMessage(authStore.uid, userMsg)
-    chatStore.messages[chatStore.messages.length - 1].id = saved.id
+    try {
+      // Create chat on first message if it doesn't exist
+      if (!currentChatId.value) {
+        currentChatId.value = await firestoreService.createChat(authStore.uid)
+      }
+      
+      const saved = await firestoreService.addMessageToChat(currentChatId.value, userMsg)
+      chatStore.messages[chatStore.messages.length - 1].id = saved.id
+    } catch (err) {
+      console.error('Failed to save user message:', err)
+    }
   }
 
   chatStore.setTyping(true)
@@ -191,17 +265,29 @@ async function sendMessage() {
   try {
     // TODO: replace with real AI/backend when ready
     await new Promise(r => setTimeout(r, 1400))
+    
     const botMsg = {
       role: 'bot',
       text: 'Thank you for your question! I\'ve found the most relevant information from our knowledge base. Is there anything else I can help you with regarding your academic journey?',
       time: now(),
       cards: null,
     }
+    
     chatStore.addMessage(botMsg)
-    if (authStore.uid) {
-      const saved = await firestoreService.addMessage(authStore.uid, botMsg)
-      chatStore.messages[chatStore.messages.length - 1].id = saved.id
+    
+    if (authStore.uid && currentChatId.value) {
+      try {
+        const saved = await firestoreService.addMessageToChat(currentChatId.value, botMsg)
+        chatStore.messages[chatStore.messages.length - 1].id = saved.id
+      } catch (err) {
+        console.error('Failed to save bot message:', err)
+      }
     }
+    
+    await nextTick()
+    bottomEl.value?.scrollIntoView({ behavior: 'smooth' })
+  } catch (err) {
+    console.error('Error in sendMessage:', err)
   } finally {
     chatStore.setTyping(false)
   }
@@ -210,5 +296,15 @@ async function sendMessage() {
 function sendQuick(text) {
   inputText.value = text
   sendMessage()
+}
+
+function handleLoginClick() {
+  chatStore.setShowGuestLimitOverlay(false)
+  router.push('/login')
+}
+
+function handleSignupClick() {
+  chatStore.setShowGuestLimitOverlay(false)
+  router.push('/register')
 }
 </script>
